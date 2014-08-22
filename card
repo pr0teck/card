@@ -1,0 +1,274 @@
+import random
+
+try:
+    import simplegui
+except ImportError:
+    import SimpleGUICS2Pygame.simpleguics2pygame as simplegui
+
+    simplegui.Frame._hide_status = True
+    simplegui.Frame._keep_timers = False
+
+
+# load card sprite - 949x392 - source: jfitz.com
+CARD_SIZE = (73, 98)
+CARD_CENTER = (36.5, 49)
+card_images = simplegui.load_image("http://commondatastorage.googleapis.com/codeskulptor-assets/cards.jfitz.png")
+
+CARD_BACK_SIZE = (71, 96)
+CARD_BACK_CENTER = (35.5, 48)
+card_back = simplegui.load_image("http://commondatastorage.googleapis.com/codeskulptor-assets/card_back.png")
+
+
+dealer = simplegui.load_image('http://rocketdock.com/images/screenshots/thumbnails/pokerstars-1.png')
+
+suits = simplegui.load_image('http://statics.trikky.ru/trikkyru/wp-content/blogs.dir/1/files/2012/08/masti_kart.png')
+
+# define globals for cards
+SUITS = ('s', 'h', 'd', 'c')
+RANKS = ('9', 'T', 'J', 'Q', 'K', 'A')
+VALUES = {'A': 6, '9': 1, 'T': 2, 'J': 3, 'Q': 4, 'K': 5}
+Players = []
+Hands = []
+owner_id = 0
+Hand_position = [[20, 300], [350, 50], [700, 300], [350, 600]]
+dealer_position = [420, 170, 420, 720]
+
+# define card class
+class Card:
+    def __init__(self, suit, rank):
+        self.value = 0
+        if (suit in SUITS) and (rank in RANKS):
+            self.suit = suit
+            self.rank = rank
+        else:
+            self.suit = None
+            self.rank = None
+            print "Invalid card: ", suit, rank
+
+    def __str__(self):
+        return self.rank + self.suit
+
+    def get_suit(self):
+        return self.suit
+
+    def get_rank(self):
+        return self.rank
+
+    def get_value(self):
+        if self.rank in RANKS:
+            return VALUES[self.rank]
+
+    def draw(self, canvas, pos):
+        if self.rank != 'A':
+            card_loc = (CARD_CENTER[0] + CARD_SIZE[0] * 8 + CARD_SIZE[0] * RANKS.index(self.rank),
+                        CARD_CENTER[1] + CARD_SIZE[1] * SUITS.index(self.suit))
+        else:
+            card_loc = (CARD_CENTER[0], CARD_CENTER[1] + CARD_SIZE[1] * SUITS.index(self.suit))
+
+        canvas.draw_image(card_images, card_loc, CARD_SIZE, [pos[0] + CARD_CENTER[0],
+                                                             pos[1] + CARD_CENTER[1]], CARD_SIZE)
+
+# define hand class
+class Hand:
+    def __init__(self):
+        self.handCards = []
+        self.value = 0
+
+    def __str__(self):
+        cardString = ''
+        for card in self.handCards:
+            cardString += str(card) + ' '
+        return 'Hand contains ' + cardString
+
+    def __iter__(self):
+        return iter(self.handCards)
+
+    def add_card(self, card):
+        self.handCards.append(card)
+
+    def draw(self, canvas, pos):
+        position = list(pos)
+        for card in self.handCards:
+            card.draw(canvas, position)
+            position[0] += 75
+
+    def get_count(self):
+        return len(self.handCards)
+
+    def remove_card(self, card):
+        self.handCards.remove(card)
+
+
+# define deck class
+class Deck:
+    def __init__(self):
+        self.deckCards = []
+        for suit in SUITS:
+            for rank in RANKS:
+                self.deckCards.append(Card(suit, rank))
+
+    def shuffle(self):
+        random.shuffle(self.deckCards)
+
+    def deal_card(self):
+        return self.deckCards.pop()
+
+    def __str__(self):
+        deckString = ''
+        for card in self.deckCards:
+            deckString += str(card) + ' '
+        return 'Deck contains ' + deckString
+
+    def isEmpty(self):
+        if len(self.deckCards) == 0:
+            return True
+        else:
+            return False
+
+
+class Player:
+    def __init__(self, player_hand, trump, index):
+        self.player_hand = player_hand
+        self.trump = trump
+        self.id = index
+
+    def get_trump(self):
+        return self.trump
+
+    def get_id(self):
+        return self.id
+
+    def get_hand(self):
+        return self.player_hand
+
+    def update_hand(self, hand):
+        self.player_hand = hand
+
+    def __str__(self):
+        return 'id:' + str(self.id) + ' ' + self.trump
+
+
+class Heap:
+    def __init__(self):
+        self.cards = []
+
+    def play(self, card):
+        self.cards.append(card)
+
+    def get_top(self):
+        return self.cards[len(self.cards) - 1]
+
+    def draw(self, canvas):
+        position = (500, 250)
+        for card in self.cards:
+            card.draw(canvas, position)
+
+
+myDeck = Deck()
+tableHeap = Heap()
+end_of_game = False
+
+
+#define event handlers for buttons
+def restart():
+    global in_play, Players, myDeck, Hands, tableHeap, end_of_game
+
+    Players = []
+    Hands = []
+    tableHeap = Heap()
+    end_of_game = False
+
+    for suit in SUITS:
+        emptyHand = Hand()
+        Players.append(Player(emptyHand, suit, SUITS.index(suit)))
+    myDeck = Deck()
+    myDeck.shuffle()
+    while not myDeck.isEmpty():
+        for player in Players:
+            currenthand = player.get_hand()
+            currenthand.add_card(myDeck.deal_card())
+            player.update_hand(currenthand)
+    in_play = True
+    for player in Players:
+        Hands.append(player.get_hand())
+
+    start()
+
+
+def start():
+    global owner_id
+    owner_id = get_move_owner()
+ #   while not end_of_game:
+  #      start_round(owner)
+
+def get_move_owner():
+    i = 0
+    for player in Players:
+        i += 1
+    return random.randrange(0, i)
+
+def start_round(move_owner):
+    pass
+
+
+# draw handler
+def draw(canvas):
+    i = 0
+    for index, hand in enumerate(Hands):
+        hand.draw(canvas, Hand_position[index])
+    tableHeap.draw(canvas)
+    card_count = Players[owner_id].get_hand().get_count()
+    for player in Players:
+        canvas.draw_image(suits, (120 * player.get_id() + 65, 80), (120, 150),
+                      (card_count * (CARD_SIZE[0] + 3)/2 + Hand_position[player.get_id()][0], dealer_position[player.get_id()] - 150),
+                      (40, 47))
+    canvas.draw_image(dealer, (75, 75), (150, 150),
+                      (card_count * (CARD_SIZE[0] + 3)/2 + Hand_position[owner_id][0], dealer_position[owner_id]),
+                      (40, 40))
+
+# return card owner
+def get_player(card):
+    for player in Players:
+        if card in player.get_hand():
+            return player
+
+def mouse_handler(position):
+    global tableHeap, Hands
+    card_clicked = get_card(position)
+    for hand in Hands:
+        if card_clicked in hand:
+            tableHeap.play(card_clicked)
+            print get_player(card_clicked)
+            hand.remove_card(card_clicked)
+
+# return card by position
+def get_card(pos):
+    i = 0
+    card_dict = {}
+
+    for hand in Hands:
+        j = 0
+        for card in hand:
+            card_dict[(Hand_position[i][0] + 75*j, Hand_position[i][1])] = card
+            j += 1
+        i += 1
+    for position in card_dict.keys():
+        if (pos[0] in range(position[0], position[0] + CARD_SIZE[0])) and \
+                (pos[1] in range(position[1], position[1] + CARD_SIZE[1])):
+            return card_dict[position]
+
+
+# initialization frame
+frame = simplegui.create_frame("Cards", 1200, 800)
+frame.set_canvas_background("Green")
+
+#create buttons and canvas callback
+frame.add_button("Restart", restart, 200)
+frame.set_draw_handler(draw)
+frame.set_mouseclick_handler(mouse_handler)
+
+# get things rolling
+restart()
+frame.start()
+
+
